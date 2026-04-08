@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>DINOSAURIO DASH</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { margin:0; overflow:hidden; font-family:Arial; }
+
+    canvas { display:none; }
+
+    #menu {
+      position:absolute;
+      width:100%; height:100%;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      flex-direction:column;
+      background:black;
+      color:white;
+      z-index:10;
+    }
+
+    #pauseText{
+      position:absolute;
+      top:50%;
+      left:50%;
+      transform:translate(-50%,-50%);
+      color:white;
+      font-size:40px;
+      display:none;
+      z-index:20;
+    }
+
+    button {
+      padding:15px 30px;
+      font-size:18px;
+      margin:10px;
+      border:none;
+      border-radius:10px;
+    }
+
+    #pauseBtn{
+      position:absolute;
+      top:10px;
+      right:10px;
+      z-index:20;
+    }
+
+    #jumpBtn{
+      position:absolute;
+      bottom:20px;
+      right:20px;
+      z-index:20;
+      font-size:22px;
+      padding:20px;
+    }
+
+    #score, #record {
+      position:absolute;
+      left:10px;
+      color:white;
+      z-index:5;
+    }
+
+    #score { top:10px; }
+    #record { top:40px; }
+  </style>
+</head>
+<body>
+
+<div id="menu">
+  <h1>🦖 DINOSAURIO DASH</h1>
+  <button onclick="startGame()">Jugar</button>
+</div>
+
+<div id="pauseText">⏸ PAUSA</div>
+
+<button id="pauseBtn" onclick="togglePause()">⏸</button>
+<button id="jumpBtn" onclick="jump()">⬆️</button>
+
+<div id="score">0</div>
+<div id="record">Récord: 0</div>
+
+<canvas id="game"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+canvas.width = innerWidth;
+canvas.height = innerHeight;
+
+const groundY = canvas.height - 140;
+
+let player, obstacles, birds, score, speed, running;
+let paused = false;
+let frame = 0;
+let animationId;
+
+let obstacleInterval, birdInterval, musicInterval;
+
+const dino1 = new Image(); dino1.src="dino1.png";
+const dino2 = new Image(); dino2.src="dino2.png";
+const cactus = new Image(); cactus.src="cactus.png";
+const birdImg = new Image(); birdImg.src="ave.png";
+
+let record = localStorage.getItem("record") || 0;
+document.getElementById("record").innerText="Récord: "+record;
+
+function startGame(){
+  clearAll();
+
+  document.getElementById("menu").style.display="none";
+  canvas.style.display="block";
+
+  paused = false;
+  document.getElementById("pauseText").style.display="none";
+
+  player={ x:100, y:groundY-50, w:50, h:50, vy:0, gravity:0.8, jump:-15 };
+
+  obstacles=[]; birds=[];
+  score=0; speed=7;
+  running=true;
+
+  obstacleInterval=setInterval(spawnObstacle,1400);
+  birdInterval=setInterval(spawnBird,2000);
+  musicInterval=setInterval(playMusic,250);
+
+  update();
+}
+
+function togglePause(){
+  if(!running) return;
+
+  paused = !paused;
+
+  document.getElementById("pauseText").style.display = paused ? "block" : "none";
+
+  if(!paused){
+    update();
+  }
+}
+
+function goMenu(){
+  clearAll();
+  running=false;
+  cancelAnimationFrame(animationId);
+
+  canvas.style.display="none";
+  document.getElementById("menu").style.display="flex";
+}
+
+function clearAll(){
+  clearInterval(obstacleInterval);
+  clearInterval(birdInterval);
+  clearInterval(musicInterval);
+}
+
+function spawnObstacle(){
+  if(!running || paused)return;
+  let t=Math.floor(Math.random()*3)+1;
+
+  for(let i=0;i<t;i++){
+    obstacles.push({
+      x:canvas.width+i*35,
+      y:(t==1)?groundY-40:groundY-60,
+      w:30,h:(t==1)?40:60
+    });
+  }
+}
+
+function spawnBird(){
+  if(!running || paused || score < 50)return;
+
+  let alturas = [
+    groundY - 220,
+    groundY - 260,
+    groundY - 300
+  ];
+
+  let yRandom = alturas[Math.floor(Math.random() * alturas.length)];
+
+  birds.push({
+    x: canvas.width,
+    y: yRandom,
+    w: 60,
+    h: 40
+  });
+}
+
+function playMusic(){
+  if(!running || paused)return;
+
+  let ctxAudio=new AudioContext();
+  let osc=ctxAudio.createOscillator();
+  osc.frequency.value=200+Math.random()*400;
+  osc.connect(ctxAudio.destination);
+  osc.start();
+  osc.stop(ctxAudio.currentTime+0.1);
+}
+
+function update(){
+  if(!running || paused)return;
+
+  ctx.fillStyle="#87CEEB";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  ctx.fillStyle="green";
+  ctx.fillRect(0,groundY,canvas.width,200);
+
+  speed=7+score*0.2;
+
+  player.vy+=player.gravity;
+  player.y+=player.vy;
+
+  if(player.y>groundY-player.h){
+    player.y=groundY-player.h;
+    player.vy=0;
+  }
+
+  frame++;
+  let img=(frame%20<10)?dino1:dino2;
+  ctx.drawImage(img,player.x,player.y,player.w,player.h);
+
+  for(let i=obstacles.length-1;i>=0;i--){
+    let o=obstacles[i];
+    o.x-=speed;
+    ctx.drawImage(cactus,o.x,o.y,o.w,o.h);
+
+    if(
+      player.x<o.x+o.w &&
+      player.x+player.w>o.x &&
+      player.y<o.y+o.h &&
+      player.y+player.h>o.y
+    ){
+      endGame();
+    }
+
+    if(o.x<-50){
+      obstacles.splice(i,1);
+      score++;
+    }
+  }
+
+  for(let i=birds.length-1;i>=0;i--){
+    let b=birds[i];
+    b.x-=speed+2;
+    ctx.drawImage(birdImg,b.x,b.y,b.w,b.h);
+
+    if(
+      player.x<b.x+b.w &&
+      player.x+player.w>b.x &&
+      player.y<b.y+b.h &&
+      player.y+player.h>b.y
+    ){
+      endGame();
+    }
+
+    if(b.x<-50)birds.splice(i,1);
+  }
+
+  document.getElementById("score").innerText="Puntos: "+score;
+
+  animationId = requestAnimationFrame(update);
+}
+
+function endGame(){
+  running=false;
+  clearAll();
+  cancelAnimationFrame(animationId);
+
+  if(score>record){
+    record=score;
+    localStorage.setItem("record",record);
+  }
+
+  document.getElementById("record").innerText="Récord: "+record;
+
+  setTimeout(()=>{
+    let opcion = confirm(
+      "💀 Perdiste\n\nPuntos: " + score +
+      "\n\nAceptar = 🔁 Reintentar\nCancelar = 🚪 Salir"
+    );
+
+    if(opcion){
+      startGame();
+    } else {
+      goMenu();
+    }
+  },100);
+}
+
+function jump(){
+  if(player && player.vy==0 && !paused){
+    player.vy=player.jump;
+  }
+}
+
+// 🔥 CONTROL CORREGIDO (sin bugs)
+document.addEventListener("keydown", (e)=>{
+
+  if(e.code === "Space"){
+    e.preventDefault();
+    jump();
+  }
+
+  if(e.code === "Escape"){
+    togglePause();
+  }
+
+});
+
+document.addEventListener("mousedown",jump);
+document.addEventListener("touchstart",jump);
+
+</script>
+</body>
+</html>
